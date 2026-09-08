@@ -13,11 +13,13 @@ export async function getProcesses() {
   const rows = JSON.parse(stdout);
   const list = Array.isArray(rows) ? rows : [rows]; // single result isn't wrapped in an array
 
-  return list.map(r => [
-    r.ProcessId,
-    r.ExecutablePath ?? null,
-    r.CommandLine ? splitCommandLine(r.CommandLine) : null,
-  ]);
+  return list
+    .filter(r => r.ExecutablePath)
+    .map(r => [
+      r.ProcessId,
+      r.ExecutablePath,
+      r.CommandLine ? splitCommandLine(r.CommandLine) : null,
+    ]);
 }
 
 function splitCommandLine(cmd) {
