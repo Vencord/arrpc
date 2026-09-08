@@ -5,8 +5,7 @@ import fs from 'node:fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const databasePath = process.env.ARRPC_DETECTABLE_CACHE_PATH || join(__dirname, 'detectable.json');
+const databasePath = process.env.ARRPC_DETECTABLE_CACHE_PATH || join(dirname(fileURLToPath(import.meta.url)), 'detectable.json');
 
 import * as Natives from './native/index.js';
 const Native = Natives[process.platform];
@@ -37,7 +36,7 @@ export default class ProcessServer {
     if (!Native) return; // log('unsupported platform:', process.platform);
 
     this.handlers = handlers;
-    this.DetectableDB = null;
+    this.DetectableDB = [];
 
     this.scan = this.scan.bind(this);
 
@@ -48,12 +47,35 @@ export default class ProcessServer {
     });
 
   }
+
+  async loadDB() {
+    try {
+      this.DetectableDB = JSON.parse(await fs.promises.readFile(databasePath, "utf-8"));
+      this.DetectableDB.push(
+        {
+          aliases: ["Obs"],
+          executables: [
+            { is_launcher: false, name: "obs", os: "linux" },
+            { is_launcher: false, name: "obs.exe", os: "win32" },
+            { is_launcher: false, name: "obs.app", os: "darwin" }
+          ],
+          hook: true,
+          id: "STREAMERMODE",
+          name: "OBS"
+        }
+      );
+    } catch (e) {
+      fs.promises.unlink(databasePath).catch(() => { });
+      log('could not load the database.', e);
+    }
+  }
+
   async initializeDatabase() {
     log("initializing database")
     const stats = await fs.promises.stat(databasePath).catch(() => null);
     if (stats && Date.now() - stats.mtime.getTime() < 24 * 60 * 60 * 1000) {
       log('database is up to date');
-      this.DetectableDB = JSON.parse(await fs.promises.readFile(databasePath, "utf-8"));
+      await this.loadDB()
       return;
     }
 
@@ -65,12 +87,7 @@ export default class ProcessServer {
       })
       .catch(error => { log(`${error}.. continuing with old database`) });
 
-    try {
-      this.DetectableDB = JSON.parse(await fs.promises.readFile(databasePath, "utf-8"));
-    } catch (err) {
-      fs.promises.unlink(databasePath).catch(() => { });
-      throw new Error(`could not load the database. aborting... ${err}`)
-    }
+    await this.loadDB()
   }
 
   async scan() {
