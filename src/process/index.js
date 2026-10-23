@@ -14,7 +14,7 @@ async function getDatabase(lastModified) {
   const res = await fetch("https://discord.com/api/v9/applications/detectable", {
     method: 'GET',
     headers: lastModified ? { 'If-Modified-Since': lastModified } : {}
-  })
+  });
 
   if (res.status === 304) return false;
   if (res.status !== 200) throw new Error(`http code ${res.status}`);
@@ -71,11 +71,11 @@ export default class ProcessServer {
   }
 
   async initializeDatabase() {
-    log("initializing database")
+    log("initializing database");
     const stats = await fs.promises.stat(databasePath).catch(() => null);
     if (stats && Date.now() - stats.mtime.getTime() < 24 * 60 * 60 * 1000) {
       log('database is up to date');
-      await this.loadDB()
+      await this.loadDB();
       return;
     }
 
@@ -83,16 +83,18 @@ export default class ProcessServer {
 
     await getDatabase(age)
       .then(updated => {
-        if (updated) log('database updated successfully')
+        if (updated) log('database updated successfully');
       })
-      .catch(error => { log(`${error}.. continuing with old database`) });
+      .catch(error => { log(`${error}.. continuing with old database`); });
 
-    await this.loadDB()
+    await this.loadDB();
   }
 
   async scan() {
     // const startTime = performance.now();
-    const processes = await Native.getProcesses();
+    const processes = await Native.getProcesses().catch(() => null);
+    if (!processes) return;
+
     const ids = [];
 
     // log(`got processed in ${(performance.now() - startTime).toFixed(2)}ms`);
