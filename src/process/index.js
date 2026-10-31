@@ -90,12 +90,30 @@ export default class ProcessServer {
     await this.loadDB();
   }
 
+  // executable name -> indices of the DB entries listing it, so scan() only checks entries that can match
+  buildIndex() {
+    const byName = new Map(), byExact = new Map();
+    this.DetectableDB.forEach(({ executables }, i) => {
+      for (const x of executables ?? []) {
+        if (x.is_launcher) continue;
+        const exact = x.name[0] === '>';
+        const map = exact ? byExact : byName;
+        const key = exact ? x.name.substring(1) : x.name;
+        const list = map.get(key);
+        if (!list) map.set(key, [i]);
+        else if (list[list.length - 1] !== i) list.push(i);
+      }
+    });
+    this.index = { db: this.DetectableDB, byName, byExact };
+  }
+
   async scan() {
     // const startTime = performance.now();
     const processes = await Native.getProcesses().catch(() => null);
     if (!processes) return;
 
     const ids = [];
+    if (this.index?.db !== this.DetectableDB) this.buildIndex();
 
     // log(`got processed in ${(performance.now() - startTime).toFixed(2)}ms`);
 
@@ -117,7 +135,11 @@ export default class ProcessServer {
         toCompare.push(p.replace('_64', ''));
       }
 
-      for (const { executables, id, name } of this.DetectableDB) {
+      const candidates = new Set(this.index.byExact.get(toCompare[0]));
+      for (const y of toCompare) for (const i of this.index.byName.get(y) ?? []) candidates.add(i);
+
+      for (const i of [...candidates].sort((a, b) => a - b)) {
+        const { executables, id, name } = this.DetectableDB[i];
         if (executables?.some(x => {
           if (x.is_launcher) return false;
           if (x.name[0] === '>' ? x.name.substring(1) !== toCompare[0] : !toCompare.some(y => x.name === y)) return false;

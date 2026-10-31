@@ -1,8 +1,17 @@
-import { readdir, readFile } from "fs/promises";
+import { readdirSync, readFileSync } from "fs";
 
-export const getProcesses = async () => (await Promise.all(
-  (await readdir("/proc")).map(pid =>
-    (+pid > 0) && readFile(`/proc/${pid}/cmdline`, 'utf8')
-      .then(path => [+pid, path.split("\0")[0], path.split("\0").slice(1)], () => 0)
-  )
-)).filter(x => x);
+// sync reads: a promise per process costs far more than the tiny /proc reads themselves
+export const getProcesses = async () => {
+  const out = [];
+  for (const pid of readdirSync("/proc")) {
+    if (!(+pid > 0)) continue;
+    let path;
+    try {
+      path = readFileSync(`/proc/${pid}/cmdline`, "utf8");
+    } catch {
+      continue;
+    }
+    out.push([+pid, path.split("\0")[0], path.split("\0").slice(1)]);
+  }
+  return out;
+};
